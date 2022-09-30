@@ -1,0 +1,28 @@
+quser /server:$Computer 2>&1 | Select-Object -Skip 1 | %{
+$obj = "" | Select-Object @{Name = 'ServerName'; Expression = {$env:COMPUTERNAME}}, UserName, ID, State, IdleTime, LogonTime 
+$items = $_.Trim() -split '\s{2,}'
+$obj.UserName     = $items[0] 
+$obj.Id          = $items[2]
+$obj.State       = $items[3]
+$obj.IdleTime    = $items[4]
+$obj.LogonTime   = $items[5..($items.GetUpperBound(0))] -join ' ' 
+$obj.IdleTime = '{0} days, {1} hours, {2} minutes' -f ([int[]]([regex]'^(?:(\d+)\+)?(\d+):(\d+)').Match($obj.IdleTime).Groups[1..3].Value | ForEach-Object { $_ })
+        # output the object
+$obj
+
+# Checking for disconnected users
+if($obj.State -eq 'Disc'){
+    
+     #read back the values for Days, Hours and Minutes from the formatted string
+     $d, $h, $m = [int[]]([regex]'(\d+) days, (\d+) hours, (\d+) minutes').Match($obj.IdleTime).Groups[1..3].Value
+     if ($h -gt 2){
+
+        # been idle for more than 3 hours, so logoff the user here
+        Write-Host "Logging off $($obj.UserName) from computer $($obj.ServerName).."
+        logoff $obj.Id /SERVER:$($obj.ServerName)
+
+    }
+
+}
+
+}
