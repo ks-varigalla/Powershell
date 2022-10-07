@@ -13,6 +13,37 @@ $Servers = Get-Content "C:\Temp\Servers.txt"
 ## Get Servers Count
 $count = $Servers.count
 
+# This creates the Excel workbook and puts data in workbook columns.
+
+    $excel = New-Object -ComObject excel.application
+
+    $excel.visible = $True
+
+    $workbook = $excel.Workbooks.Add()
+
+    $workbook.Worksheets.Add()
+
+    $passwd = $workbook.Worksheets.Item(1)
+
+#Headers in the worksheet
+
+    $passwd.Cells.Item(1,1) = 'USERNAME'
+
+    $passwd.Cells.Item(1,2) = 'IDLETIME'
+
+    $passwd.Cells.Item(1,3) = 'SERVERNAME'
+
+    $row = 2
+
+    # Formatting the Headers
+
+    for($h = 1 ; $h -lt 4 ; $h++){
+
+        $passwd.Cells.Item(1,$h).Font.Bold = $True
+
+    }
+
+
 #$Computer="localhost"
 
 # Function for removing disconnected user sessions
@@ -80,8 +111,22 @@ $op | Out-File -Append "C:\Temp\new\$computer.csv"| ConvertTo-Csv | Format-Table
        $output = Invoke-Command -ComputerName $name -ScriptBlock ${function:DisconnectedUsers} -ArgumentList $name
 
        $output
+       
+       $passwd.Cells.Item($row,1) = $output[0]
+
+       $passwd.Cells.Item($row,2) = $output[1]
+
+       $passwd.Cells.Item($row,3) = $output[2]
 
  }  
+ 
+ # Save the report and close Excel
+
+    $workbook.Activesheet.Cells.EntireColumn.Autofit()
+
+    $WorkBook.SaveAs("$name.xlsx")
+
+    $WorkBook.close($true)
 
 
         #logoff /server $serverName $session.Id    }} #>
