@@ -1,0 +1,118 @@
+#*****************************************************************************************************************************************************
+#****************************** AUTOMATICALLY REMOVING DISCONNECTED USER SESSIONS AFTER A SPECIFIED IDLE TIME ****************************************
+#*****************************************************************************************************************************************************
+
+## Clear Host Console
+
+Clear-Host
+
+## Define Variable for Server Count
+
+$z = 0
+
+##Set Default Script Location
+
+Set-Location $PSScriptRoot
+
+## Provide List of Servers to Check for the Disconnected user session
+
+$Servers = Get-Content "C:\Temp\Servers.txt"
+
+## Get Servers Count
+
+$count = $Servers.count
+
+$obj = "" | Select USERNAME,IDLETIME,SERVERNAME
+
+# Function for removing disconnected user sessions
+
+Function DisconnectedUsers($Computer)
+{
+
+$sessions = quser /server:$Computer| ?{ $_ -notmatch '^ SESSIONNAME' } | %{
+
+$item = "" | Select @{Name = 'ServerName'; Expression = {$env:COMPUTERNAME}},"Username", "Id", "State", "IdleTime", "LogonTime"
+
+$item.UserName = $_.Substring(1,20).Trim()
+
+$item.Id = $_.Substring(39,5).Trim()
+
+$item.State = $_.Substring(45,8).Trim()
+
+$item.IdleTime = $_.Substring(56,9).Trim()
+
+$item.LogonTime = $_.Substring(66).Trim()
+
+$item.IdleTime = '{0} days, {1} hours, {2} minutes' -f ([int[]]([regex]'^(?:(\d+)\+)?(\d+):(\d+)').Match($item.IdleTime).Groups[1..3].Value | ForEach-Object { $_ })
+       
+} 
+
+foreach ($session in $sessions){
+
+    # Check for the disconnected users
+
+    if ($session.State -eq "Disc"){
+
+        $d, $h, $m = [int[]]([regex]'(\d+) days, (\d+) hours, (\d+) minutes').Match($session.IdleTime).Groups[1..3].Value
+
+         if ($h -ge 2){
+
+            # been idle for more than 3 hours, so logoff the user here
+
+            $obj.USERNAME = $session.UserName
+
+            $obj.IDLETIME = $session.IdleTime
+
+            $obj.SERVERNAME = $session.ServerName
+
+            Write-Host "Logging off $($session.UserName) from computer $($session.ServerName).."
+
+            logoff $session.Id /SERVER:$($session.ServerName)
+
+            #$obj
+
+        }
+
+    }
+
+  }
+
+  $obj
+
+}
+
+<#
+# Calling the finction locally
+
+$Computer="localhost"
+$op = DisconnectedUsers($Computer)
+$op | Export-Csv -Path .\output.csv -NoTypeInformation 
+
+foreach($obj in $op){
+#$obj 
+#$obj | Select-Object -Property $obj.USERNAME, $obj.SERVERNAME,$obj.IDLETIME #| export-Csv -LiteralPath  .\output.csv -Force -Append  -NoTypeInformation  
+$obj | Export-Csv .\output.csv -Force -Append  -NoTypeInformation  
+
+}
+#>
+
+
+# Calling the function on each remote server in '$Servers' 
+
+ foreach($name in $Servers){
+ 
+       $z+=1 
+
+       Write-Host "Processing server-$z : $name, out of $count servers" -BackgroundColor Blue
+
+       $op = Invoke-Command -ComputerName $name -ScriptBlock ${function:DisconnectedUsers} -ArgumentList $name
+
+       $op | Select-Object USERNAME,IDLETIME,SERVERNAME | Export-Csv -Path C:\Temp\DisconnectedUsersList.xlsx -Append -NoTypeInformation
+       
+
+}  
+
+# Sending email
+
+Send-MailMessage -SmtpServer smtp.primark.ie -From Autoscript@primark.ie -To OMC-PRI-HCL-WINTEL@hcl.com -Cc venkatesh-sr@hcl.com -Subject "Disconnected UsersList" -Attachments "C:\Temp\DisconnectedUsersList.xlsx"
+
