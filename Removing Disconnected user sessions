@@ -1,0 +1,60 @@
+Function DisconnectedUsers($Computer)
+{
+$final = @()
+
+quser /server:$Computer| ?{ $_ -notmatch '^ SESSIONNAME' } | %{
+
+$item = "" | Select @{Name = 'ServerName'; Expression = {$env:COMPUTERNAME}},"Username", "Id", "State", "IdleTime", "LogonTime"
+
+$item.UserName = $_.Substring(1,20).Trim()
+
+$item.Id = $_.Substring(39,5).Trim()
+
+$item.State = $_.Substring(45,8).Trim()
+
+$item.IdleTime = $_.Substring(56,9).Trim()
+
+$item.LogonTime = $_.Substring(66).Trim()
+
+$item.IdleTime = '{0} days, {1} hours, {2} minutes' -f ([int[]]([regex]'^(?:(\d+)\+)?(\d+):(\d+)').Match($item.IdleTime).Groups[1..3].Value | ForEach-Object { $_ })
+  
+# Check for the disconnected users
+
+    if ($item.State -eq "Active"){
+
+        $d, $h, $m = [int[]]([regex]'(\d+) days, (\d+) hours, (\d+) minutes').Match($item.IdleTime).Groups[1..3].Value
+
+         if ($h -ge 2){
+
+            # been idle for more than 3 hours, so logoff the user here
+
+            #$item.UserName, $item.IdleTime, $item.ServerName
+
+            $obj = New-Object -TypeName psobject -Property ([ordered]@{
+
+            USERNAME = $item.UserName
+
+            IDLETIME = $item.IdleTime
+
+            SERVERNAME = $item.ServerName }) 
+
+            $final+=$obj
+
+            Write-Host "Logging off $($item.UserName) from computer $($item.ServerName).."
+
+            #logoff $session.Id /SERVER:$($session.ServerName)
+
+        }
+
+    }
+
+  }  
+  $final     
+}
+
+# Calling the function locally
+
+
+$Computer="localhost"
+$op = DisconnectedUsers($Computer)
+$op | Export-Csv -Path .\outpu.csv -NoTypeInformation 
