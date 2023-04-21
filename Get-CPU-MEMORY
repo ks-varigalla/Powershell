@@ -1,0 +1,127 @@
+#*************************************************************************************************************************************************************** 
+#******************************************** Getting CPU and Memory Utilisation Of the Running Processes *****************************************************
+#***************************************************************************************************************************************************************             
+
+# Getting the list of Servers
+
+$Server = Get-Content -Path "C:\Temp\Servers.txt"
+
+$name = "localhost"
+
+$date = Get-Date -Format dd-MM-yyyyT-hhmmss
+
+Function Get-CPU
+{ 
+    $RAM = Get-WMIObject Win32_PhysicalMemory | Measure -Property capacity -Sum | %{$_.sum/1Mb}
+    
+    $cores = (Get-WmiObject Win32_Processor).NumberOfLogicalProcessors
+    
+    $count = $cores.Count
+
+    $tmp = Get-WmiObject Win32_PerfFormattedData_PerfProc_Process | 
+    
+    Select-Object -property @{n="ServerName";e={$env:COMPUTERNAME}}, @{n="ProcessName";e={$_.Name}}, @{Name = "CPU(%)"; Expression = {[math]::Round(($_.PercentProcessorTime/$count),2)}}, @{Name = "PID"; Expression = {$_.IDProcess}}, @{"Name" = "Memory(MB)"; Expression = {[int]($_.WorkingSetPrivate/1mb)}}, @{"Name" = "Memory(%)"; Expression = {([math]::Round(($_.WorkingSetPrivate/1Mb)/$RAM*100,2))}} |
+    
+    Where-Object {$_.ProcessName -notmatch "^(idle|_total|system)$"} |
+    
+    Sort-Object -Property "CPU(%)" -Descending|
+    
+    Select-Object -First 5;
+    
+    cls
+
+    $tmp #| Format-Table -Autosize -Property ServerName,ProcessName, PID, "CPU(%)", "Memory(%)", "Memory(MB)";
+    
+    #Start-Sleep 3 #>
+}
+
+Function Get-Memory()
+{
+    $RAM = Get-WMIObject Win32_PhysicalMemory | Measure -Property capacity -Sum | %{$_.sum/1Mb}
+
+    $cores = (Get-WmiObject Win32_Processor).NumberOfLogicalProcessors
+    
+    $count = $cores.Count
+
+    $tmp = Get-WmiObject Win32_PerfFormattedData_PerfProc_Process | 
+    
+    Select-Object -property @{n="ServerName";e={$env:COMPUTERNAME}}, @{n="ProcessName";e={$_.Name}}, @{Name = "PID"; Expression = {$_.IDProcess}}, @{Name = "CPU(%)"; Expression = {[math]::Round(($_.PercentProcessorTime/$count),2)}}, @{"Name" = "Memory(MB)"; Expression = {[int]($_.WorkingSetPrivate/1mb)}}, @{"Name" = "Memory(%)"; Expression = {([math]::Round(($_.WorkingSetPrivate/1Mb)/$RAM*100,2))}} |
+    
+    Where-Object {$_.ProcessName -notmatch "^(idle|_total|system)$"} |
+    
+    Sort-Object -Property "Memory(%)" -Descending|
+    
+    Select-Object -First 5;
+    
+    cls
+
+    $tmp #| Format-Table -Autosize -Property ServerName,ProcessName, PID, "CPU(%)", "Memory(%)", "Memory(MB)";
+    
+   # Start-Sleep 3 #>
+
+
+}
+
+Function Get-Total()
+{
+    
+    $Processor = (Get-WmiObject -Class win32_processor -ErrorAction Stop | Measure-Object -Property LoadPercentage -Average | Select-Object Average).Average
+    
+    $ComputerMemory = Get-WmiObject -Class win32_operatingsystem -ErrorAction Stop
+    
+    $Memory = ((($ComputerMemory.TotalVisibleMemorySize - $ComputerMemory.FreePhysicalMemory)*100)/ $ComputerMemory.TotalVisibleMemorySize) 
+    
+    $RoundMemory = [math]::Round($Memory, 2)
+    
+    $Pstable= [PSCustomObject]@{
+    
+    ServerName = $env:COMPUTERNAME
+
+    "Total CPU(%)" = $Processor
+
+    "Total Memory(%)" = $RoundMemory
+
+    }  
+
+    $Pstable
+}
+
+<#
+# Calling the Function locally
+
+$output1 = Get-CPU
+$output1 | select ServerName,ProcessName, PID, "CPU(%)", "Memory(%)", "Memory(MB)" | Export-Excel -Path .\cpu-mem-util-$date.xlsx -WorksheetName "High CPU consuming" -BoldTopRow -AutoSize
+
+$output2 = Get-Memory
+$output2 | select ServerName,ProcessName, PID, "Memory(%)", "Memory(MB)", "CPU(%)" | Export-Excel -Path .\cpu-mem-util-$date.xlsx -WorksheetName "High Memory consuming" -BoldTopRow -AutoSize
+
+$output3 = Get-Total
+$output3 | select ServerName, "Total CPU(%)", "Total Memory(%)" | Export-Excel -Path .\cpu-mem-util-$date.xlsx -WorksheetName "Total CPU&Memory(%) usage" -BoldTopRow -AutoSize
+
+#$Output | select ServerName,ProcessName, PID, "CPU(%)", "Memory(%)", "Memory(MB)"| Export-Csv .\CPUMEMORY.csv -Append -NoTypeInformation
+
+#>
+
+# Calling the function on the remote servers
+
+ foreach ($name in $Server){
+
+       Write-Host "The CPU and Memory utilisation of the server '$name' are: "
+
+       $output1 = Invoke-Command -ComputerName $name -ScriptBlock ${function:Get-CPU}
+
+       $output1 | select ServerName,ProcessName, PID, "CPU(%)", "Memory(%)", "Memory(MB)" | Export-Excel -Path "C:\Temp\CPU&MEMORY UtilizationReport-$date.xlsx" -WorksheetName "High CPU consuming" -BoldTopRow -AutoSize -Append
+
+       $output2 = Invoke-Command -ComputerName $name -ScriptBlock ${function:Get-Memory}
+
+       $output2 | select ServerName,ProcessName, PID, "Memory(%)", "Memory(MB)", "CPU(%)" | Export-Excel -Path "C:\Temp\CPU&MEMORY UtilizationReport-$date.xlsx" -WorksheetName "High Memory consuming" -BoldTopRow -AutoSize -Append
+        
+       $output3 = Invoke-Command -ComputerName $name -ScriptBlock ${function:Get-Total}
+
+       $output3 | select ServerName, "Total CPU(%)", "Total Memory(%)" | Export-Excel -Path "C:\Temp\CPU&MEMORY UtilizationReport-$date.xlsx" -WorksheetName "Total CPU&Memory(%) usage" -BoldTopRow -AutoSize -Append
+
+       Write-Host "Report has been generated for the server $name and saved to C:\Temp\CPU&MEMORY UtilizationReport-$date.xlsx" -BackgroundColor Green
+
+}
+
+#********************************************************* END OF THE SCRIPT *****************************************************************************************
