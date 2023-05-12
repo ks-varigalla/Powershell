@@ -1,0 +1,71 @@
+Clear-Host 
+
+$FileName = "C:\Temp\Serveruptime23.csv"
+
+# Removing the older file
+if(Test-Path -Path "C:\Temp\Serveruptime.csv"){
+
+    Remove-Item -Path "C:\Temp\Serveruptime.csv"
+}
+if(Test-Path -Path "C:\Temp\Serveruptime.xlsx"){
+
+    Remove-Item -Path "C:\Temp\Serveruptime.xlsx"
+}
+
+function get-uptime { 
+ param( 
+ $computername =$env:computername 
+ ) 
+ $osname = Get-WmiObject win32_operatingsystem -ComputerName $computername -ea silentlycontinue 
+ if($osname)
+ { 
+ $lastbootuptime =$osname.ConvertTodateTime($osname.LastBootUpTime) 
+ $LocalDateTime =$osname.ConvertTodateTime($osname.LocalDateTime) 
+ $up =$LocalDateTime - $lastbootuptime 
+ $days = $up.Days
+ $uptime ="$($up.Days) days, $($up.Hours)h, $($up.Minutes)mins" 
+ $output =new-object psobject 
+ $output |Add-Member noteproperty LastBootUptime $LastBootuptime 
+ $output |Add-Member noteproperty ComputerName $computername 
+ $output |Add-Member noteproperty "Uptime (No.of Days)" $days
+ $output | Select-Object computername,LastBootuptime,"Uptime (No.of Days)"
+ } 
+ else  
+ { 
+  $output =New-Object psobject 
+  # $output =new-object psobject 
+  $output |Add-Member noteproperty LastBootUptime "Not Available" 
+  $output |Add-Member noteproperty ComputerName $computername 
+  $output |Add-Member noteproperty "Uptime (No.of Days)" "Not Available"  
+  $output | Select-Object computername,LastBootUptime,"Uptime (No.of Days)"
+ } 
+ } 
+ <#
+ # Running locally
+ $od = get-uptime
+ $od | Select ComputerName, LastBootUptime, "Uptime (No.of Days)" | 
+Export-Csv "C:\Temp\Serveruptime30.csv" -NoTypeInformation -append
+
+Import-Csv "C:\Temp\Serveruptime30.csv" | Export-Excel "C:\Temp\Serveruptime30.xlsx" -AutoSize -AutoFilter -BoldTopRow
+$xl = Open-ExcelPackage -Path "C:\Temp\Serveruptime30.xlsx"
+Add-ConditionalFormatting -Worksheet $xl.Sheet1 -Address "C2:C2" -RuleType GreaterThan -ConditionValue 10 -BackgroundColor Red #-ForegroundColor green
+Close-ExcelPackage $xl -Show
+ #>
+
+
+# Working over remote computers
+$allserver =Get-Content -Path "C:\temp\Server-Uptime.txt" 
+$count = $allserver.Count + 1
+foreach($oneserver in $allserver)
+{ 
+$multiplemachines = get-uptime $oneserver 
+$multiplemachines | Select ComputerName, LastBootUptime, "Uptime (No.of Days)" | 
+Export-Csv "C:\Temp\Serveruptime.csv" -NoTypeInformation -append 
+
+}
+
+# Sheet formatting
+Import-Csv "C:\Temp\Serveruptime.csv" | Export-Excel "C:\Temp\Serveruptime.xlsx" -AutoSize -AutoFilter -BoldTopRow
+$xl = Open-ExcelPackage -Path "C:\Temp\Serveruptime.xlsx"
+Add-ConditionalFormatting -Worksheet $xl.Sheet1 -Address "C2:C$count" -RuleType GreaterThan -ConditionValue 60 -BackgroundColor Red #-ForegroundColor green
+Close-ExcelPackage $xl -Show
