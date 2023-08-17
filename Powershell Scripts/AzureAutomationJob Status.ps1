@@ -1,0 +1,1 @@
+﻿$op = Get-AzAutomationJobOutput -Id 64665aa8-9443-498b-8969-1b5d4ea670f7 -ResourceGroupName logging-northeurope-rg -AutomationAccountName FISKARS-DEV-AUTO-NE-AA -Stream Output | select *
