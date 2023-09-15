@@ -1,0 +1,91 @@
+<#### INTEGRATING 4me TOOL INTO POWERSHELL USING API ##########
+Developed by :- Krishna Sai V (varigalla.krishnasai@hcl.com)
+Last Modified:- 01/06/2023
+Date Created :- 01/06/2023
+###############################################################>
+
+
+# Fetching the assigned tickets as per the Bearer token
+
+$params = @{
+
+    Uri = "https://api.4me-demo.com/v1/requests/assigned_to_me?status=assigned" 
+    
+    Method = "Get"
+    
+    Headers = @{
+        
+        # Authorization = 'Bearer <Token ID>'
+       
+        Authorization = 'Bearer demo2142518-zfiX1UknhVSSGA2qa4SiHz57z5lidWc4WmIfRCbE7UlWhUCLDv2yrMSzIITQrb1YJAdzgWilcnQTnrUXkPogfjp4DXB9mtd04KtxDoE0csDPMUUY' 
+       
+        # "X-4me-Account" =  "4me_account_ID"
+       
+        "X-4me-Account" =  "wdc"
+        
+        }
+    
+    ContentType = "application/json"
+
+}
+
+$out = Invoke-RestMethod @params  | ConvertTo-Json
+
+$output2 = $out |ConvertFrom-Json
+
+$nodeid = $output2.value | select nodeid
+
+$count = $output2.Count
+
+## URI for fetching all assigned requests to a team ID:   "https://api.4me-demo.com/v1/requests?status=assigned&team_id=17" 
+
+# Ticket body to be updated
+
+$body = @{ 
+
+    "status" = "completed"
+    
+    "completion_reason" = "solved"
+    
+    "note" = "sampletest" 
+
+} 
+
+$json_body = $body | ConvertTo-Json
+
+$ur2 = "https://api.4me-demo.com/v1/requests/"
+
+# Iterating through each incident
+
+for($i=0;$i -lt $count;$i++){
+
+    $id = $nodeid[$i].nodeiD
+    
+    $param = @{
+    
+    Uri = $ur2 + $id
+    
+    Method = "patch"
+    
+    Headers = @{
+        
+        Authorization = 'Bearer demo2142518-zfiX1UknhVSSGA2qa4SiHz57z5lidWc4WmIfRCbE7UlWhUCLDv2yrMSzIITQrb1YJAdzgWilcnQTnrUXkPogfjp4DXB9mtd04KtxDoE0csDPMUUY' 
+       
+        "X-4me-Account" =  "wdc"
+        
+        }
+    
+    body = $json_body
+    
+    ContentType = "application/json"
+    
+    }
+
+    $patch = Invoke-RestMethod @param
+
+    $patch
+
+}
+
+
+# Uri = "https://api.4me-demo.com/v1/requests/assigned_to_me?status=assigned"  # Requests tht are assigned to token profile
